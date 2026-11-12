@@ -1628,6 +1628,18 @@ public class QuorumControllerTest {
     }
 
     @Test
+    public void testAppendRecordsWithExactMultipleOfMaxRecordsPerBatch() {
+        TestAppender appender = new TestAppender();
+        assertEquals(4, QuorumController.appendRecords(log,
+            ControllerResult.of(List.of(rec(0), rec(1), rec(2), rec(3)), null),
+            2,
+            records -> {
+                assertFalse(records.isEmpty(), "An empty batch must not be appended");
+                return appender.apply(records);
+            }));
+    }
+
+    @Test
     public void testAppendRecordsAtomically() {
         TestAppender appender = new TestAppender();
         assertEquals("Attempted to atomically commit 5 records, but maxRecordsPerBatch is 2",
