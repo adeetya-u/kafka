@@ -326,6 +326,35 @@ public class BufferPoolTest {
     }
 
     @Test
+    public void testLargeFreeListDoesNotOverflow() throws Exception {
+        long memory = 4_000_000_000L;
+        int poolableSize = 2_000_000_000;
+        final AtomicInteger freeSize = new AtomicInteger(0);
+        BufferPool pool = new BufferPool(memory, poolableSize, metrics, time, metricGroup) {
+            @Override
+            protected ByteBuffer allocateByteBuffer(int size) {
+                // Ignore size to avoid OOM due to large buffers
+                return ByteBuffer.allocate(0);
+            }
+
+            @Override
+            protected int freeSize() {
+                return freeSize.get();
+            }
+        };
+        pool.allocate(poolableSize, 0);
+        pool.allocate(poolableSize, 0);
+        assertEquals(0L, pool.availableMemory());
+
+        // Emulate `deallocate` of both buffers by increasing `freeSize`
+        freeSize.set(2);
+        assertEquals(4_000_000_000L, pool.availableMemory());
+
+        // All of the memory is in the free list, so a buffer of another size is allocated without blocking
+        pool.allocate(1024, 0);
+    }
+
+    @Test
     public void outOfMemoryOnAllocation() {
         BufferPool bufferPool = new BufferPool(1024, 1024, metrics, time, metricGroup) {
             @Override
