@@ -1633,6 +1633,58 @@ public class ShareGroupCommandTest {
     }
 
     @Test
+    public void testResetOffsetsToCurrentWithoutStartOffset() {
+        String group = "share-group";
+        String topic = "topic";
+        String bootstrapServer = "localhost:9092";
+        String[] cgcArgs = new String[]{"--bootstrap-server", bootstrapServer, "--reset-offsets", "--to-current", "--dry-run", "--all-topics", "--group", group};
+        Admin adminClient = mock(KafkaAdminClient.class);
+
+        // A share-partition which has been initialized for the group but does not have a start offset yet
+        // is listed with a null SharePartitionOffsetInfo.
+        Map<TopicPartition, SharePartitionOffsetInfo> offsetInfo = new HashMap<>();
+        offsetInfo.put(new TopicPartition(topic, 0), new SharePartitionOffsetInfo(10L, Optional.empty(), Optional.empty()));
+        offsetInfo.put(new TopicPartition(topic, 1), null);
+        ListShareGroupOffsetsResult listShareGroupOffsetsResult = AdminClientTestUtils.createListShareGroupOffsetsResult(
+            Map.of(group, KafkaFuture.completedFuture(offsetInfo))
+        );
+        when(adminClient.listShareGroupOffsets(any(), any(ListShareGroupOffsetsOptions.class))).thenReturn(listShareGroupOffsetsResult);
+        // Only the partition without a start offset needs its log end offset.
+        Map<TopicPartition, OffsetAndMetadata> partitionEndOffsets = Map.of(
+            new TopicPartition(topic, 1), new OffsetAndMetadata(25));
+        ListOffsetsResult listEndOffsetsResult = AdminClientTestUtils.createListOffsetsResult(partitionEndOffsets);
+        when(adminClient.listOffsets(any(), any(ListOffsetsOptions.class))).thenReturn(listEndOffsetsResult);
+
+        ShareGroupDescription exp = new ShareGroupDescription(
+            group,
+            List.of(),
+            GroupState.EMPTY,
+            new Node(0, "host1", 9090), 0, 0);
+        DescribeShareGroupsResult describeShareGroupsResult = mock(DescribeShareGroupsResult.class);
+        when(describeShareGroupsResult.describedGroups()).thenReturn(Map.of(group, KafkaFuture.completedFuture(exp)));
+        when(adminClient.describeShareGroups(any(), any(DescribeShareGroupsOptions.class))).thenReturn(describeShareGroupsResult);
+        Map<String, TopicDescription> descriptions = Map.of(
+            topic, new TopicDescription(topic, false, List.of(
+                new TopicPartitionInfo(0, new Node(0, "localhost", 9092), List.of(), List.of()),
+                new TopicPartitionInfo(1, new Node(0, "localhost", 9092), List.of(), List.of())
+            )));
+        DescribeTopicsResult describeTopicResult = mock(DescribeTopicsResult.class);
+        when(describeTopicResult.allTopicNames()).thenReturn(completedFuture(descriptions));
+        when(adminClient.describeTopics(anyCollection())).thenReturn(describeTopicResult);
+        when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(describeTopicResult);
+
+        try (ShareGroupService service = getShareGroupService(cgcArgs, adminClient)) {
+            Map<String, Map<TopicPartition, OffsetAndMetadata>> offsetsForGroups = service.resetOffsets();
+            assertEquals(
+                Map.of(
+                    new TopicPartition(topic, 0), new OffsetAndMetadata(10L),
+                    new TopicPartition(topic, 1), new OffsetAndMetadata(25L)),
+                offsetsForGroups.get(group));
+            verify(adminClient, times(0)).alterShareGroupOffsets(any(), any(), any(AlterShareGroupOffsetsOptions.class));
+        }
+    }
+
+    @Test
     public void testResetOffsetsExportImportComplexPlan() throws Exception {
         String group = "share-group";
         String topic = "topic";

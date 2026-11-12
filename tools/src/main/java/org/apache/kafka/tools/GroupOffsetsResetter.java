@@ -422,7 +422,9 @@ public class GroupOffsetsResetter {
     }
 
     public Map<TopicPartition, OffsetAndMetadata> resetToCurrentForShareGroup(Collection<TopicPartition> partitionsToReset, Map<TopicPartition, SharePartitionOffsetInfo> currentOffsetInfo) {
-        Map<Boolean, List<TopicPartition>> partitioned = partitionsToReset.stream().collect(Collectors.partitioningBy(currentOffsetInfo::containsKey));
+        // A share-partition which has been initialized for the group but does not have a start offset yet
+        // is present in the map with a null value, so check the value rather than the presence of the key.
+        Map<Boolean, List<TopicPartition>> partitioned = partitionsToReset.stream().collect(Collectors.partitioningBy(tp -> currentOffsetInfo.get(tp) != null));
         List<TopicPartition> partitionsToResetWithStartOffset = partitioned.get(true);
         List<TopicPartition> partitionsToResetWithoutStartOffset = partitioned.get(false);
 
