@@ -17,8 +17,10 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.ConfigRecord;
+import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.SupportedConfigChecker;
@@ -111,6 +113,18 @@ public class ConfigurationsImageTest {
 
     private static void testToImage(ConfigurationsImage image) {
         testToImage(image, Optional.empty());
+    }
+
+    @Test
+    public void testTopicConfigsCreatedAndRemovedInSameDelta() {
+        ConfigurationsDelta delta = new ConfigurationsDelta(ConfigurationsImage.EMPTY, SupportedConfigChecker.TRUE);
+        delta.replay(new ConfigRecord().
+            setResourceType(ConfigResource.Type.TOPIC.id()).
+            setResourceName("foo").
+            setName("retention.ms").
+            setValue("60000"));
+        delta.replay(new RemoveTopicRecord().setTopicId(Uuid.randomUuid()), "foo");
+        assertEquals(ConfigurationsImage.EMPTY, delta.apply());
     }
 
     private static void testToImage(ConfigurationsImage image, Optional<List<ApiMessageAndVersion>> fromRecords) {

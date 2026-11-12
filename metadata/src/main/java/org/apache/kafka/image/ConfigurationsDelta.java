@@ -73,12 +73,17 @@ public final class ConfigurationsDelta {
     public void replay(RemoveTopicRecord record, String topicName) {
         ConfigResource resource =
             new ConfigResource(Type.TOPIC, topicName);
-        if (image.resourceData().containsKey(resource)) {
+        ConfigurationDelta delta = changes.get(resource);
+        if (delta == null) {
             ConfigurationImage configImage = image.resourceData().get(resource);
-            ConfigurationDelta delta = changes.computeIfAbsent(resource,
-                __ -> new ConfigurationDelta(configImage, supportedConfigChecker));
-            delta.deleteAll();
+            if (configImage == null) {
+                return;
+            }
+            delta = new ConfigurationDelta(configImage, supportedConfigChecker);
+            changes.put(resource, delta);
         }
+        // This also discards any configs which were set for the topic earlier in this delta.
+        delta.deleteAll();
     }
 
     public ConfigurationsImage apply() {
