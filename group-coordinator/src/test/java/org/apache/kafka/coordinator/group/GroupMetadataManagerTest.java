@@ -21381,6 +21381,51 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsGroupMemberWithUserEndpointJoiningWithMissingSourceTopic() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String fooTopicName = "foo";
+        String barTopicName = "bar";
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId("subtopology1").setSourceTopics(List.of(fooTopicName)),
+            new Subtopology().setSubtopologyId("subtopology2").setSourceTopics(List.of(barTopicName))
+        ));
+
+        CoordinatorMetadataImage metadataImage = new MetadataImageBuilder()
+            .addTopic(Uuid.randomUuid(), fooTopicName, 6)
+            .buildCoordinatorMetadataImage();
+
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(new MockTaskAssignor("sticky")))
+            .withMetadataImage(metadataImage)
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 0)
+            .build();
+
+        // A member with a user endpoint joins while a source topic is missing. The topology cannot be
+        // configured, so there are no partitions to report for the endpoint.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setRebalanceTimeoutMs(1500)
+                .setTopology(topology)
+                .setProcessId(DEFAULT_PROCESS_ID)
+                .setUserEndpoint(new StreamsGroupHeartbeatRequestData.Endpoint().setHost("localhost").setPort(9092))
+                .setActiveTasks(List.of())
+                .setStandbyTasks(List.of())
+                .setWarmupTasks(List.of()));
+
+        assertEquals(
+            List.of(new StreamsGroupHeartbeatResponseData.Status()
+                .setStatusCode(Status.MISSING_SOURCE_TOPICS.code())
+                .setStatusDetail("Source topics bar are missing.")),
+            result.response().data().status()
+        );
+        assertEquals(List.of(), result.response().data().partitionsByUserEndpoint());
+    }
+
+    @Test
     public void testStreamsGroupMemberJoiningWithMissingSourceTopic() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();

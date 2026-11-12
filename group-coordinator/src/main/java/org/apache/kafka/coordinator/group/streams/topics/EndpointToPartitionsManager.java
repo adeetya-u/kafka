@@ -42,7 +42,8 @@ public class EndpointToPartitionsManager {
      * @param streamsGroupMember The streams group member.
      * @param streamsGroup       The streams group.
      * @param metadataImage      The metadata image.
-     * @return An Optional containing the EndpointToPartitions if the member has an endpoint, empty otherwise.
+     * @return An Optional containing the EndpointToPartitions if the member has an endpoint and the topology
+     *         is configured, empty otherwise.
      */
     public static Optional<StreamsGroupHeartbeatResponseData.EndpointToPartitions> maybeEndpointToPartitions(
         final StreamsGroupMember streamsGroupMember,
@@ -51,6 +52,11 @@ public class EndpointToPartitionsManager {
     ) {
         Optional<StreamsGroupMemberMetadataValue.Endpoint> endpointOptional = streamsGroupMember.userEndpoint();
         if (endpointOptional.isEmpty()) {
+            return Optional.empty();
+        }
+        if (streamsGroup.configuredTopology().flatMap(ConfiguredTopology::subtopologies).isEmpty()) {
+            // The topology is not configured, for example because source topics are missing,
+            // so the partitions of the member's tasks cannot be resolved.
             return Optional.empty();
         }
 
