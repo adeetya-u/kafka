@@ -31,6 +31,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -186,6 +187,29 @@ public class SetSchemaMetadataTest {
 
         Struct newValue = (Struct) xform.updateSchemaIn(value, newSchema);
         assertMatchingSchema(newValue, newSchema);
+    }
+
+    @Test
+    public void schemaNameAndVersionUpdateForNonStructSchemas() {
+        final Map<String, String> props = new HashMap<>();
+        props.put("schema.name", "foo");
+        props.put("schema.version", "42");
+        xform.configure(props);
+
+        final Map<Schema, Object> valuesBySchema = new HashMap<>();
+        valuesBySchema.put(Schema.STRING_SCHEMA, "value");
+        valuesBySchema.put(SchemaBuilder.array(Schema.INT32_SCHEMA).build(), List.of(1, 2));
+        valuesBySchema.put(SchemaBuilder.map(Schema.STRING_SCHEMA, Schema.INT32_SCHEMA).build(), Map.of("key", 1));
+
+        valuesBySchema.forEach((schema, value) -> {
+            final SinkRecord record = new SinkRecord("", 0, null, null, schema, value, 0);
+            final SinkRecord updatedRecord = xform.apply(record);
+
+            assertEquals(schema.type(), updatedRecord.valueSchema().type());
+            assertEquals("foo", updatedRecord.valueSchema().name());
+            assertEquals(42, updatedRecord.valueSchema().version());
+            assertSame(value, updatedRecord.value());
+        });
     }
 
     @Test
