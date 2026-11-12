@@ -353,13 +353,20 @@ public class MirrorSourceConnectorTest {
     }
 
     @Test
+    public void testDefaultConfigPropertyFilterExcludesMessageTimestampConfigs() {
+        DefaultConfigPropertyFilter filter = new DefaultConfigPropertyFilter();
+        assertFalse(filter.shouldReplicateConfigProperty("message.timestamp.before.max.ms"));
+        assertFalse(filter.shouldReplicateConfigProperty("message.timestamp.after.max.ms"));
+    }
+
+    @Test
     public void testNewTopicConfigs() throws Exception {
         Map<String, Object> filterConfig = new HashMap<>();
         filterConfig.put(DefaultConfigPropertyFilter.CONFIG_PROPERTIES_EXCLUDE_CONFIG, "follower.replication.throttled.replicas, "
                 + "leader.replication.throttled.replicas, "
                 + "message.timestamp.difference.max.ms, "
-                + "log.message.timestamp.before.max.ms, "
-                + "log.message.timestamp.after.max.ms, "
+                + "message.timestamp.before.max.ms, "
+                + "message.timestamp.after.max.ms, "
                 + "message.timestamp.type, "
                 + "unclean.leader.election.enable, "
                 + "min.insync.replicas,"
